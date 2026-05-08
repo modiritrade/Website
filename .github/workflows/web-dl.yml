@@ -1,0 +1,76 @@
+name: Fetch page with assets into pages/
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "Enter you URL"
+        required: true
+        type: string
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install wget
+        run: sudo apt-get update && sudo apt-get install -y wget
+
+      - name: Prepare output dir
+        run: |
+          rm -rf pages/*
+          mkdir -p pages
+
+      - name: Mirror page and assets
+        env:
+          TARGET_URL: ${{ inputs.target_url }}
+        run: |
+          set -euo pipefail
+
+          echo "Target: $TARGET_URL"
+
+          # مسیر خروجی
+          OUTDIR="pages"
+
+          # این wget معمولاً:
+          # - صفحه + منابع وابسته از همان دامنه/مسیر را می‌کشد
+          # - لینک‌ها را به فایل‌های محلی بازنویسی می‌کند
+          #
+          # --page-requisites منابعی مثل تصاویر/CSS/JS را می‌گیرد
+          # --convert-links لینک‌ها را local می‌کند
+          # --adjust-extension برای انتهایی مثل / یا محتوا بدون پسوند، پسوند مناسب می‌گذارد
+          # --span-hosts/ --domains را اگر خواستی می‌تونی محدودتر کنی
+          wget \
+            --recursive \
+            --level=inf \
+            --no-parent \
+            --page-requisites \
+            --span-hosts \
+            --domains=*.${TARGET_URL#https://} \
+            --adjust-extension \
+            --convert-links \
+            --no-host-directories \
+            --restrict-file-names=unix \
+            --ignore-errors \
+            --wait=0.5 \
+            --timeout=30 \
+            -e robots=off \
+            "$TARGET_URL" \
+            --directory-prefix="$OUTDIR"
+
+      - name: Commit and push
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add pages/
+          git commit -m "Mirror page from ${{ inputs.target_url }}"
+          git push

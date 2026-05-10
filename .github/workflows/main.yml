@@ -1,4 +1,4 @@
-name: Fetch page to pages/ (simple .html v2)
+name: Fetch page and save
 
 on:
   workflow_dispatch:
@@ -9,14 +9,15 @@ on:
         type: string
 
 jobs:
-  fetch:
+  fetch_and_save:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Create pages directory and download page
+        id: download_page # شناسه برای ارجاع به این step
         env:
           TARGET_URL: ${{ inputs.target_url }}
         run: |
@@ -25,33 +26,39 @@ jobs:
           echo "Directory 'pages' created."
 
           echo "Downloading page from: $TARGET_URL"
-          # Use curl to download the page and save it as index.html in the pages directory
           curl -L -sS "$TARGET_URL" -o "pages/index.html"
-          echo "Page downloaded successfully to pages/index.html."
+          echo "Page downloaded to pages/index.html."
 
-      - name: Commit and push the downloaded file
+          # بررسی اینکه آیا فایل با موفقیت دانلود شده است
+          if [ ! -f "pages/index.html" ]; then
+            echo "Error: Failed to download the page or file was not created."
+            exit 1
+          fi
+          echo "File check successful."
+
+      - name: Commit and push changes
         run: |
-          # Check if there are any changes to commit
-          if [[ -z $(git status -s) ]]; then
-            echo "No changes detected. Skipping commit."
+          echo "Checking for changes..."
+          # Use git status --porcelain to get a stable output for checking changes
+          if [[ -z $(git status --porcelain) ]]; then
+            echo "No changes to commit. Skipping push."
             exit 0
           fi
 
           echo "Configuring Git user..."
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          echo "Git user configured."
 
-          echo "Adding pages/index.html to Git..."
+          echo "Adding downloaded file to Git..."
           git add pages/index.html
-          echo "File added."
 
           echo "Committing changes..."
-          git commit -m "Fetched page from ${{ inputs.target_url }}"
-          echo "Changes committed."
+          git commit -m "Automated fetch of ${{ inputs.target_url }}"
 
-          echo "Pushing changes to repository..."
-          git push
+          echo "Pushing changes..."
+          # Use the default GITHUB_TOKEN for pushing
+          git push origin HEAD:${{ github.ref_name }}
           echo "Changes pushed successfully."
         env:
+          # Ensure GITHUB_TOKEN is available
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

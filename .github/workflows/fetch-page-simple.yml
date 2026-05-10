@@ -1,0 +1,53 @@
+name: Fetch page to pages/ (simple .html)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "URL صفحه‌ای که می‌خواهی دانلود شود"
+        required: true
+        type: string
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare output directory
+        run: |
+          # پاک کردن پوشه pages اگر وجود دارد
+          rm -rf pages
+          # ساخت پوشه pages
+          mkdir -p pages
+
+      - name: Download target page as HTML
+        env:
+          TARGET_URL: ${{ inputs.target_url }}
+        run: |
+          echo "Downloading: $TARGET_URL"
+          # ذخیره صفحه با پسوند .html در پوشه pages
+          curl -L -sS "$TARGET_URL" -o "pages/index.html"
+
+      - name: Commit and push the downloaded page
+        run: |
+          # بررسی اینکه تغییری اتفاق افتاده است یا نه
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          # تنظیم اطلاعات کاربر برای commit
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # اضافه کردن فایل دانلود شده به staging area
+          git add pages/index.html
+          # کامیت کردن تغییرات
+          git commit -m "Fetched page from ${{ inputs.target_url }}"
+          # پوش کردن تغییرات به ریپازیتوری
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,10 +1,10 @@
-name: Fetch page to pages/ (simple .html)
+name: Fetch page to pages/ (simple .html v2)
 
 on:
   workflow_dispatch:
     inputs:
       target_url:
-        description: "URL صفحه‌ای که می‌خواهی دانلود شود"
+        description: "URL of the page to download"
         required: true
         type: string
 
@@ -13,41 +13,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Prepare output directory
-        run: |
-          # پاک کردن پوشه pages اگر وجود دارد
-          rm -rf pages
-          # ساخت پوشه pages
-          mkdir -p pages
-
-      - name: Download target page as HTML
+      - name: Create pages directory and download page
         env:
           TARGET_URL: ${{ inputs.target_url }}
         run: |
-          echo "Downloading: $TARGET_URL"
-          # ذخیره صفحه با پسوند .html در پوشه pages
-          curl -L -sS "$TARGET_URL" -o "pages/index.html"
+          echo "Creating directory 'pages'..."
+          mkdir -p pages
+          echo "Directory 'pages' created."
 
-      - name: Commit and push the downloaded page
+          echo "Downloading page from: $TARGET_URL"
+          # Use curl to download the page and save it as index.html in the pages directory
+          curl -L -sS "$TARGET_URL" -o "pages/index.html"
+          echo "Page downloaded successfully to pages/index.html."
+
+      - name: Commit and push the downloaded file
         run: |
-          # بررسی اینکه تغییری اتفاق افتاده است یا نه
-          if git diff --quiet; then
-            echo "No changes to commit."
+          # Check if there are any changes to commit
+          if [[ -z $(git status -s) ]]; then
+            echo "No changes detected. Skipping commit."
             exit 0
           fi
 
-          # تنظیم اطلاعات کاربر برای commit
+          echo "Configuring Git user..."
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "Git user configured."
 
-          # اضافه کردن فایل دانلود شده به staging area
+          echo "Adding pages/index.html to Git..."
           git add pages/index.html
-          # کامیت کردن تغییرات
+          echo "File added."
+
+          echo "Committing changes..."
           git commit -m "Fetched page from ${{ inputs.target_url }}"
-          # پوش کردن تغییرات به ریپازیتوری
+          echo "Changes committed."
+
+          echo "Pushing changes to repository..."
           git push
+          echo "Changes pushed successfully."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
